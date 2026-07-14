@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Визуализатор токенов (Final)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Segoe UI', -apple-system, Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1vh 2vw;
+  }
+  .container {
+    display: flex;
+    flex-direction: column;
+    height: 96vh;
+    width: 100%;
+    max-width: 1400px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+  }
+  .header {
+    padding: 14px 24px;
+    background: #1a1a2e;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #2d2d44;
+  }
+  .header h1 { font-size: 15px; font-weight: 600; color: #00d9ff; }
+  .stats {
+    display: flex;
+    gap: 16px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .stats span { color: #7ee787; font-weight: 600; }
+  #outputArea {
+    flex: 1;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 28px 40px;
+    overflow-y: auto;
+    font-size: 15px;
+    line-height: 1.7;
+    scroll-behavior: smooth;
+  }
+  #outputArea h1, #outputArea h2, #outputArea h3 {
+    color: #f0f6fc;
+    margin-top: 1.2em;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #21262d;
+  }
+  #outputArea h3 { border-bottom: none; }
+  #outputArea p { margin: 0.7em 0; }
+  #outputArea ul, #outputArea ol { padding-left: 2em; margin: 0.5em 0; }
+  #outputArea li { margin: 0.25em 0; }
+  #outputArea blockquote {
+    border-left: 3px solid #1f6feb;
+    padding-left: 1em;
+    color: #8b949e;
+    margin: 0.8em 0;
+    font-style: italic;
+  }
+  #outputArea table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    font-size: 14px;
+  }
+  #outputArea th, #outputArea td {
+    border: 1px solid #30363d;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  #outputArea th { background: #161b22; color: #f0f6fc; }
+  #outputArea tr:nth-child(even) { background: #161b2280; }
+  #outputArea pre {
+    background: #161b22;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    border: 1px solid #30363d;
+    margin: 1em 0;
+    color: #c9d1d9;
+  }
+  #outputArea code {
+    background: #161b22;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.9em;
+    color: #ff7b72;
+  }
+  #outputArea pre code { background: none; padding: 0; color: #c9d1d9; }
+  #outputArea hr { border: none; border-top: 1px solid #30363d; margin: 2em 0; }
+  #outputArea strong { color: #f0f6fc; }
+  #outputArea input[type="checkbox"] { margin-right: 8px; }
+  .katex-display { margin: 1em 0 !important; }
+  .controls {
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: #161b22;
+    border-top: 1px solid #30363d;
+  }
+  .speed-label {
+    font-weight: 600;
+    font-size: 14px;
+    min-width: 170px;
+    color: #7ee787;
+    font-family: 'Consolas', monospace;
+  }
+  input[type="range"] {
+    flex: 1;
+    min-width: 200px;
+    height: 6px;
+    -webkit-appearance: none;
+    background: #30363d;
+    border-radius: 5px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #7ee787;
+    box-shadow: 0 2px 8px rgba(126, 231, 135, 0.4);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #7ee787;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  button {
+    background: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  button:hover { background: #30363d; border-color: #8b949e; }
+  .pause-btn { background: #1f6feb; border-color: #1f6feb; color: white; }
+  .pause-btn:hover { background: #388bfd; }
+  .pause-btn.paused { background: #da3633; border-color: #da3633; }
+  .pause-btn.paused:hover { background: #f85149; }
+  #offlineWarning {
+    display: none;
+    padding: 10px 20px;
+    background: #f85149;
+    color: white;
+    text-align: center;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>⚡ LLM TOKEN VISUALIZER</h1>
+    <div class="stats">
+      <div>Real TPS: <span id="realTps">0</span></div>
+      <div>Tokens: <span id="tokenCount">0</span></div>
+      <div>FPS: <span id="fpsCount">0</span></div>
+    </div>
+  </div>
+  <div id="offlineWarning">⚠ Нет подключения к интернету. Markdown и LaTeX не будут отрендерены.</div>
+  <div id="outputArea"></div>
+  <div class="controls">
+    <span class="speed-label" id="speedLabel">Скорость: 10.0 TPS</span>
+    <input type="range" id="speedSlider" min="1" max="200" step="0.5" value="10">
+    <button id="restartButton">↻ Заново</button>
+    <button id="pauseButton" class="pause-btn">⏸ Пауза</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 1. ТЕКСТ С MARKDOWN + LATEX
+// ============================================================
+const MARKDOWN_TEXT = `### Полный отчёт: Эксперимент по оптимизации гиперпараметров
+
+**Дата:** 2025-12-10 | **Автор:** ml-lab@company
+
+---
+
+#### 1. Введение и постановка задачи
+
+Мы провели серию экспериментов с целью подобрать оптимальные значения learning rate, batch size и числа слоёв для трансформерной модели классификации текстов. Исходные данные — набор из 120 000 отзывов пользователей на русском языке, размеченных на 5 классов тональности.
+
+> «Никакая модель не может считаться готовой до тех пор, пока не пройдёт хотя бы три цикла кросс-валидации».
+> — из внутренней методологии компании
+
+#### 2. Аппаратное обеспечение
+
+| Компонент | Характеристика |
+|-----------|----------------|
+| GPU       | 2 × NVIDIA A100 80GB |
+| CPU       | AMD EPYC 7763 (128 ядер) |
+| ОЗУ       | 512 GB DDR4 |
+| Диск      | NVMe RAID-0 4 TB |
+
+#### 3. Сетка гиперпараметров
+
+- **learning rate:** 1e-5, 3e-5, 5e-5, 1e-4
+- **batch size:** 8, 16, 32, 64
+- **число слоёв:** 6, 8, 10, 12
+
+#### 4. Результаты: точность на валидации
+
+| lr \\ bs | 8     | 16    | 32    | 64    |
+|----------|-------|-------|-------|-------|
+| 1e-5     | 0.851 | 0.867 | 0.872 | 0.865 |
+| 3e-5     | 0.874 | 0.881 | 0.885 | 0.876 |
+| 5e-5     | 0.868 | 0.875 | 0.879 | 0.870 |
+| 1e-4     | 0.842 | 0.851 | 0.856 | 0.844 |
+
+Лучший результат: **0.885** при lr=3e-5, bs=32.
+
+#### 5. Анализ статистической значимости
+
+Для сравнения топ-3 конфигураций использовался критерий Мак-Нимара:
+
+$$\\chi^2 = \\frac{(|b-c|-1)^2}{b+c}$$
+
+При уровне значимости α=0.05 разница между конфигурациями оказалась статистически значимой (p < 0.01).
+
+#### 6. Выводы и дальнейшие шаги
+
+1. Оптимальный learning rate лежит в диапазоне 2e-5 — 4e-5.
+2. Увеличение batch size свыше 32 не даёт прироста и замедляет обучение.
+3. Глубина сети слабо влияет на качество при данном размере датасета.
+
+**План действий:**
+- [x] Завершить базовые эксперименты
+- [ ] Провести тонкую настройку с дифференцированным lr по слоям
+- [ ] Исследовать влияние warmup steps
+- [ ] Подготовить production-пайплайн
+
+#### 7. Пример кода для воспроизведения
+
+\`\`\`python
+from transformers import AutoModelForSequenceClassification, Trainer
+model = AutoModelForSequenceClassification.from_pretrained(
+    "bert-base-multilingual-cased", num_labels=5
+)
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset
+)
+trainer.train()
+\`\`\`
+
+---
+
+*Отчёт сгенерирован автоматически. При обнаружении неточностей просьба обращаться в #ml-reports.*`;
+
+// ============================================================
+// 2. ТОКЕНИЗАТОР (субслова)
+// ============================================================
+function tokenize(text) {
+  const tokens = [];
+  const regex = /(\s+|[.,!?;:—\-()[\]{}"'«»…%$#@&*+\/=<>|~`^]+|\d+(?:\.\d+)?)/g;
+  let lastIndex = 0, match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push(...splitIntoSubtokens(text.substring(lastIndex, match.index)));
+    }
+    tokens.push(...splitIntoSubtokens(match[0]));
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    tokens.push(...splitIntoSubtokens(text.substring(lastIndex)));
+  }
+  return tokens;
+}
+
+function splitIntoSubtokens(str) {
+  if (!str) return [];
+  if (/^\s+$/.test(str) || str.length < 3) return [str];
+  const chunks = [];
+  for (let i = 0; i < str.length; i += 3) {
+    chunks.push(str.substring(i, i + 3));
+  }
+  return chunks;
+}
+
+const tokens = tokenize(MARKDOWN_TEXT);
+
+// ============================================================
+// 3. СОСТОЯНИЕ
+// ============================================================
+let currentIndex = 0;
+let timeoutId = null;
+let rafId = null;
+let running = true;
+let rawText = '';
+let pendingRender = false;
+
+let tokenCountTotal = 0;
+let lastStatsTime = performance.now();
+let tokensSinceLastStats = 0;
+let framesSinceLastStats = 0;
+
+const outputDiv = document.getElementById('outputArea');
+const speedSlider = document.getElementById('speedSlider');
+const speedLabel = document.getElementById('speedLabel');
+const restartBtn = document.getElementById('restartButton');
+const pauseBtn = document.getElementById('pauseButton');
+const realTpsEl = document.getElementById('realTps');
+const tokenCountEl = document.getElementById('tokenCount');
+const fpsCountEl = document.getElementById('fpsCount');
+const offlineWarning = document.getElementById('offlineWarning');
+
+// Проверка доступности CDN
+const libsLoaded = (typeof marked !== 'undefined') && (typeof katex !== 'undefined');
+if (!libsLoaded) {
+  offlineWarning.style.display = 'block';
+}
+
+function updateSpeedLabel() {
+  speedLabel.textContent = `Скорость: ${parseFloat(speedSlider.value).toFixed(1)} TPS`;
+}
+
+// ============================================================
+// 4. РЕНДЕРИНГ (marked.js + KaTeX)
+// ============================================================
+function renderToHTML(mdText) {
+  if (!libsLoaded) {
+    return '<pre style="white-space: pre-wrap;">' + 
+           mdText.replace(/&/g, '&amp;').replace(/</g, '&lt;') + 
+           '</pre>';
+  }
+  
+  let html = marked.parse(mdText, { breaks: true, gfm: true });
+  
+  const latexRegex = /\$\$([\s\S]*?)\$\$/g;
+  html = html.replace(latexRegex, (match, formula) => {
+    try {
+      return katex.renderToString(formula, { throwOnError: false, displayMode: true });
+    } catch (e) {
+      return match;
+    }
+  });
+  
+  return html;
+}
+
+function doRender() {
+  pendingRender = false;
+  rafId = null;
+  
+  const scrollTop = outputDiv.scrollTop;
+  const wasAtBottom = (outputDiv.scrollHeight - outputDiv.clientHeight - scrollTop) < 50;
+  
+  outputDiv.innerHTML = renderToHTML(rawText);
+  
+  if (wasAtBottom) {
+    outputDiv.scrollTop = outputDiv.scrollHeight;
+  }
+  
+  framesSinceLastStats++;
+}
+
+function requestRender() {
+  if (!pendingRender) {
+    pendingRender = true;
+    rafId = requestAnimationFrame(doRender);
+  }
+}
+
+// ============================================================
+// 5. ГЕНЕРАЦИЯ
+// ============================================================
+function showNextToken() {
+  if (!running) return;
+  
+  if (currentIndex >= tokens.length) {
+    currentIndex = 0;
+  }
+  
+  rawText += tokens[currentIndex];
+  currentIndex++;
+  tokenCountTotal++;
+  tokensSinceLastStats++;
+  
+  // Очистка памяти
+  if (rawText.length > 25000) {
+    rawText = rawText.slice(-20000);
+  }
+  
+  requestRender();
+  scheduleNext();
+}
+
+function scheduleNext() {
+  const speed = parseFloat(speedSlider.value);
+  const delayMs = Math.max(1, Math.round(1000 / speed));
+  timeoutId = setTimeout(showNextToken, delayMs);
+}
+
+function clearAll() {
+  if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  pendingRender = false;
+}
+
+function restartAnimation() {
+  clearAll();
+  running = true;
+  pauseBtn.textContent = '⏸ Пауза';
+  pauseBtn.classList.remove('paused');
+  rawText = '';
+  currentIndex = 0;
+  tokenCountTotal = 0;
+  outputDiv.innerHTML = '';
+  scheduleNext();
+}
+
+function togglePause() {
+  if (running) {
+    running = false;
+    clearAll();
+    pauseBtn.textContent = '▶ Продолжить';
+    pauseBtn.classList.add('paused');
+  } else {
+    running = true;
+    pauseBtn.textContent = '⏸ Пауза';
+    pauseBtn.classList.remove('paused');
+    scheduleNext();
+  }
+}
+
+function onSpeedChange() {
+  updateSpeedLabel();
+  if (running) {
+    clearAll();
+    scheduleNext();
+  }
+}
+
+function updateStats() {
+  const now = performance.now();
+  const elapsed = (now - lastStatsTime) / 1000;
+  
+  realTpsEl.textContent = Math.round(tokensSinceLastStats / elapsed);
+  tokenCountEl.textContent = tokenCountTotal;
+  fpsCountEl.textContent = Math.round(framesSinceLastStats / elapsed);
+  
+  tokensSinceLastStats = 0;
+  framesSinceLastStats = 0;
+  lastStatsTime = now;
+}
+
+// ============================================================
+// 6. ЗАПУСК
+// ============================================================
+restartBtn.addEventListener('click', restartAnimation);
+pauseBtn.addEventListener('click', togglePause);
+speedSlider.addEventListener('input', onSpeedChange);
+
+updateSpeedLabel();
+setInterval(updateStats, 1000);
+restartAnimation();
+</script>
+</body>
+</html>
