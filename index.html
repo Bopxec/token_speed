@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Визуализатор токенов</title>
+<title>Визуализатор токенов (Final Optimized)</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -24,6 +24,7 @@
     height: 96vh;
     width: 100%;
     max-width: 1400px;
+    min-width: 0; /* ИСПРАВЛЕНИЕ: Запрещаем flex-контейнеру растягиваться от широкого контента */
     background: #ffffff;
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -49,13 +50,14 @@
   .stats span { color: #7ee787; font-weight: 600; }
   #outputArea {
     flex: 1;
+    min-width: 0; /* ИСПРАВЛЕНИЕ: Запрещаем растягиваться области вывода */
     background: #0d1117;
     color: #c9d1d9;
     padding: 28px 40px;
     overflow-y: auto;
+    overflow-x: hidden; /* ИСПРАВЛЕНИЕ: Скрываем возможный горизонтальный скролл внутри области */
     font-size: 15px;
     line-height: 1.7;
-    scroll-behavior: smooth;
   }
   #outputArea h1, #outputArea h2, #outputArea h3 {
     color: #f0f6fc;
@@ -110,6 +112,16 @@
   #outputArea strong { color: #f0f6fc; }
   #outputArea input[type="checkbox"] { margin-right: 8px; }
   .katex-display { margin: 1em 0 !important; }
+  
+  /* ИСПРАВЛЕНИЕ: Класс для изоляции формулы */
+  .math-isolation {
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    width: 100%;
+    margin: 1em 0;
+  }
+
   .controls {
     padding: 18px 24px;
     display: flex;
@@ -181,15 +193,6 @@
     font-size: 13px;
   }
 </style>
-<!-- Иконка для вкладки браузера (ПК) -->
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
-
-<!-- Иконка для мобильных устройств (iOS и Android) -->
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<link rel="manifest" href="/site.webmanifest">
- 
 </head>
 <body>
 <div class="container">
@@ -258,8 +261,7 @@ const MARKDOWN_TEXT = `### Полный отчёт: Эксперимент по 
 
 Для сравнения топ-3 конфигураций использовался критерий Мак-Нимара:
 
-$$\\chi^2 = \\frac{(|b-c|-1)^2}{b+c}$$
-
+ $$\\chi^2 = \\frac{(|b-c|-1)^2}{b+c}$$ 
 При уровне значимости α=0.05 разница между конфигурациями оказалась статистически значимой (p < 0.01).
 
 #### 6. Выводы и дальнейшие шаги
@@ -327,19 +329,16 @@ function splitIntoSubtokens(str) {
 const tokens = tokenize(MARKDOWN_TEXT);
 
 // ============================================================
-// 3. СОСТОЯНИЕ
+// 3. СОСТОЯНИЕ И DOM
 // ============================================================
 let currentIndex = 0;
-let timeoutId = null;
-let rafId = null;
 let running = true;
 let rawText = '';
-let pendingRender = false;
 
 let tokenCountTotal = 0;
 let lastStatsTime = performance.now();
 let tokensSinceLastStats = 0;
-let framesSinceLastStats = 0;
+let actualFrames = 0;
 
 const outputDiv = document.getElementById('outputArea');
 const speedSlider = document.getElementById('speedSlider');
@@ -351,7 +350,6 @@ const tokenCountEl = document.getElementById('tokenCount');
 const fpsCountEl = document.getElementById('fpsCount');
 const offlineWarning = document.getElementById('offlineWarning');
 
-// Проверка доступности CDN
 const libsLoaded = (typeof marked !== 'undefined') && (typeof katex !== 'undefined');
 if (!libsLoaded) {
   offlineWarning.style.display = 'block';
@@ -362,7 +360,7 @@ function updateSpeedLabel() {
 }
 
 // ============================================================
-// 4. РЕНДЕРИНГ (marked.js + KaTeX)
+// 4. РЕНДЕРИНГ (с троттлингом)
 // ============================================================
 function renderToHTML(mdText) {
   if (!libsLoaded) {
@@ -376,7 +374,11 @@ function renderToHTML(mdText) {
   const latexRegex = /\$\$([\s\S]*?)\$\$/g;
   html = html.replace(latexRegex, (match, formula) => {
     try {
-      return katex.renderToString(formula, { throwOnError: false, displayMode: true });
+      // ИСПРАВЛЕНИЕ: Вписываем отрисовку формулы в "рамки" изолирующего div-контейнера.
+      // overflow-x:auto не дает формуле растянуть страницу, а position:relative изолирует absolute-элементы KaTeX.
+      return '<div class="math-isolation">' + 
+             katex.renderToString(formula, { throwOnError: false, displayMode: true }) + 
+             '</div>';
     } catch (e) {
       return match;
     }
@@ -385,63 +387,79 @@ function renderToHTML(mdText) {
   return html;
 }
 
+let renderTimer = null;
+
 function doRender() {
-  pendingRender = false;
-  rafId = null;
-  
   const scrollTop = outputDiv.scrollTop;
-  const wasAtBottom = (outputDiv.scrollHeight - outputDiv.clientHeight - scrollTop) < 50;
+  const wasAtBottom = (outputDiv.scrollHeight - outputDiv.clientHeight - scrollTop) < 100;
   
   outputDiv.innerHTML = renderToHTML(rawText);
   
   if (wasAtBottom) {
     outputDiv.scrollTop = outputDiv.scrollHeight;
   }
-  
-  framesSinceLastStats++;
 }
 
 function requestRender() {
-  if (!pendingRender) {
-    pendingRender = true;
-    rafId = requestAnimationFrame(doRender);
+  if (!renderTimer) {
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      doRender();
+    }, 40);
   }
 }
 
 // ============================================================
-// 5. ГЕНЕРАЦИЯ
+// 5. ГЕНЕРАЦИЯ (Игровой цикл с Delta Time)
 // ============================================================
-function showNextToken() {
+let rafId = null;
+let lastTime = performance.now();
+let tokenBuffer = 0;
+
+function loop(currentTime) {
   if (!running) return;
   
-  if (currentIndex >= tokens.length) {
-    currentIndex = 0;
-  }
-  
-  rawText += tokens[currentIndex];
-  currentIndex++;
-  tokenCountTotal++;
-  tokensSinceLastStats++;
-  
-  // Очистка памяти
-  if (rawText.length > 25000) {
-    rawText = rawText.slice(-20000);
-  }
-  
-  requestRender();
-  scheduleNext();
-}
+  const delta = currentTime - lastTime;
+  lastTime = currentTime;
 
-function scheduleNext() {
   const speed = parseFloat(speedSlider.value);
-  const delayMs = Math.max(1, Math.round(1000 / speed));
-  timeoutId = setTimeout(showNextToken, delayMs);
+  tokenBuffer += (speed / 1000) * delta;
+
+  actualFrames++;
+
+  if (tokenBuffer >= 1) {
+    const tokensToGen = Math.floor(tokenBuffer);
+    tokenBuffer -= tokensToGen;
+    
+    let chunk = '';
+    for (let i = 0; i < tokensToGen; i++) {
+      if (currentIndex >= tokens.length) {
+        currentIndex = 0;
+        chunk += '\n\n---\n\n'; 
+      }
+      chunk += tokens[currentIndex];
+      currentIndex++;
+      tokenCountTotal++;
+      tokensSinceLastStats++;
+    }
+    rawText += chunk;
+    
+    if (rawText.length > 20000) {
+      rawText = rawText.slice(-15000);
+    }
+    
+    requestRender();
+  }
+
+  rafId = requestAnimationFrame(loop);
 }
 
+// ============================================================
+// 6. УПРАВЛЕНИЕ
+// ============================================================
 function clearAll() {
-  if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
   if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-  pendingRender = false;
+  if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
 }
 
 function restartAnimation() {
@@ -453,7 +471,11 @@ function restartAnimation() {
   currentIndex = 0;
   tokenCountTotal = 0;
   outputDiv.innerHTML = '';
-  scheduleNext();
+  
+  lastTime = performance.now();
+  tokenBuffer = 0;
+  
+  rafId = requestAnimationFrame(loop);
 }
 
 function togglePause() {
@@ -466,16 +488,14 @@ function togglePause() {
     running = true;
     pauseBtn.textContent = '⏸ Пауза';
     pauseBtn.classList.remove('paused');
-    scheduleNext();
+    
+    lastTime = performance.now();
+    rafId = requestAnimationFrame(loop);
   }
 }
 
 function onSpeedChange() {
   updateSpeedLabel();
-  if (running) {
-    clearAll();
-    scheduleNext();
-  }
 }
 
 function updateStats() {
@@ -484,15 +504,15 @@ function updateStats() {
   
   realTpsEl.textContent = Math.round(tokensSinceLastStats / elapsed);
   tokenCountEl.textContent = tokenCountTotal;
-  fpsCountEl.textContent = Math.round(framesSinceLastStats / elapsed);
+  fpsCountEl.textContent = Math.round(actualFrames / elapsed);
   
   tokensSinceLastStats = 0;
-  framesSinceLastStats = 0;
+  actualFrames = 0;
   lastStatsTime = now;
 }
 
 // ============================================================
-// 6. ЗАПУСК
+// 7. ЗАПУСК
 // ============================================================
 restartBtn.addEventListener('click', restartAnimation);
 pauseBtn.addEventListener('click', togglePause);
